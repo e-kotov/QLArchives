@@ -1,6 +1,6 @@
-![macOS 10.15+](https://img.shields.io/badge/macOS-10.15+-888)
+[![macOS 10.15+](https://img.shields.io/badge/macOS-10.15+-888)](#)
 [![Current release](https://img.shields.io/github/release/relikd/QLArchives)](https://github.com/relikd/QLArchives/releases/latest)
-![All downloads](https://img.shields.io/github/downloads/relikd/QLArchives/total)
+[![All downloads](https://img.shields.io/github/downloads/relikd/QLArchives/total)](https://github.com/relikd/QLArchives/releases)
 
 <img src="resources/icon.svg" width="180" height="180">
 
@@ -17,6 +17,7 @@ A simple quicklook plugin for archive formats.
 - No (external) dependencies
 - macOS 10.15+
 - Small app size (2 MB)
+- Customize sort order
 - Archive support for: `.7z`, `.apk`, `.cab`, `.cdr`, `.cpio`, `.deb`, `.epub`, `.ipsw`, `.iso`, `.jar`, `.lha`, `.pkg`, `.rar`, `.rpm`, `.tar`, `.tar.bz2`, `.tar.gz`, `.tar.lz`, `.tar.xz`, `.tbz`, `.tbz2`, `.tgz`, `.tlz`, `.txz`, `.war`, `.xar`, `.xip`, `.zip`, `.zipx`
 
 

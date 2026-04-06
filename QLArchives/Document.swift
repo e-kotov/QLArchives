@@ -1,9 +1,8 @@
 import Cocoa
 
 // FIXME: rename popover does not work
-// TODO: open files on drag-n-drop window
 
-class Document: NSDocument, NSWindowDelegate {
+class Document: NSDocument, NSWindowDelegate, NSDraggingDestination {
 	var url: URL? = nil
 	var loaded: Bool = false
 	
@@ -27,6 +26,7 @@ class Document: NSDocument, NSWindowDelegate {
 		if let win = wc.window {
 			restoreWindowSize(win)
 		}
+		wc.window?.registerForDraggedTypes([.fileURL])
 	}
 	
 	override nonisolated func read(from url: URL, ofType typeName: String) throws {
@@ -65,6 +65,20 @@ class Document: NSDocument, NSWindowDelegate {
 		if w > 0 && h > 0 {
 			win.setFrame(CGRect(origin: win.frame.origin, size: .init(width: w, height: h)), display: true)
 		}
+	}
+	
+	// MARK: - Drag-drop open files
+	
+	func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
+		.generic
+	}
+	
+	func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
+		if let files = sender.draggingPasteboard.readObjects(forClasses: [NSURL.self]) as? [URL] {
+			NSWorkspace.shared.open(files, withApplicationAt: Bundle.main.bundleURL, configuration: NSWorkspace.OpenConfiguration())
+			return true
+		}
+		return false
 	}
 }
 
