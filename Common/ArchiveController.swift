@@ -1,0 +1,262 @@
+import Foundation
+import Cocoa
+
+// TODO: collapsible nested folders
+// TODO: drag & drop extract
+// TODO: checkbox to hide folders
+
+class ArchiveController: NSViewController, NSOutlineViewDelegate, NSOutlineViewDataSource {
+	
+	@IBOutlet var outline: NSOutlineView!
+	@IBOutlet var metaInfo: NSTextField!
+	@IBOutlet var searchField: NSSearchField!
+	
+	@IBOutlet var errorView: NSView!
+	@IBOutlet var errorText: NSTextField!
+	
+	private var fileURL: URL? = nil
+	private var data: [ArchiveEntry] = []
+	private var filter: [ArchiveEntry]? = nil
+	
+	override var nibName: NSNib.Name? {
+		return NSNib.Name("ArchiveController")
+	}
+	
+	override func viewDidLoad() {
+		metaInfo.stringValue = ""
+	}
+	
+	// Use these two to disable initial focus of search field
+	
+//	override func viewWillAppear() {
+//		searchField.refusesFirstResponder = true
+//	}
+	
+//	override func viewDidAppear() {
+//		searchField.refusesFirstResponder = false
+//	}
+	
+	// MARK: - Load data
+	
+	@discardableResult func load(_ url: URL) -> Bool {
+		fileURL = nil
+		data = []
+		do {
+			let archive = try LibArchive(url)
+			for entry in archive {
+				data.append(entry)
+			}
+			fileURL = url
+			updateMetaInfo(archive)
+			outline.reloadData()
+			applySort() // apply previous sort & filter
+			return true
+		} catch {
+			self.view = errorView
+			errorText.stringValue = "ERROR: " + error.localizedDescription
+			return false
+		}
+	}
+	
+	func updateMetaInfo(_ archive: LibArchive) {
+		var txt = Formatter.bytes(archive.compressedSize) + " / " + Formatter.bytes(archive.uncompressedSize)
+		if archive.uncompressedSize > 0 {
+			let ratio = 1 - Float(archive.compressedSize) / Float(archive.uncompressedSize)
+			let percent = Int(ratio * 1000) / 10
+			txt += " (\(percent)%)"
+		}
+		metaInfo.stringValue = "\(txt) — \(archive.count) items"
+		// fit min size
+		var fitted = metaInfo.frame
+		fitted.size.width = metaInfo.fittingSize.width
+		fitted.origin.x = metaInfo.frame.maxX - fitted.width // right-aligned on previous frame
+		metaInfo.frame = fitted
+	}
+	
+	// MARK: - Outline View
+	
+	func outlineView(_ outlineView: NSOutlineView, numberOfChildrenOfItem item: Any?) -> Int {
+		filter?.count ?? data.count
+	}
+	
+	func outlineView(_ outlineView: NSOutlineView, child index: Int, ofItem item: Any?) -> Any {
+		filter?[index] ?? data[index]
+	}
+	
+	func outlineView(_ outlineView: NSOutlineView, isItemExpandable item: Any) -> Bool {
+		false
+	}
+	
+	func outlineView(_ outlineView: NSOutlineView, sortDescriptorsDidChange oldDescriptors: [NSSortDescriptor]) {
+		applySort()
+	}
+	
+	func outlineView(_ outlineView: NSOutlineView, willDisplayCell cell: Any, for tableColumn: NSTableColumn?, item: Any) {
+		guard let cell = cell as? NSCell, let obj = item as? ArchiveEntry  else {
+			return
+		}
+		switch tableColumn?.identifier {
+		case NSUserInterfaceItemIdentifier(rawValue: "icon"):
+			switch obj.filetype {
+			case .RegularFile:
+				cell.image = NSImage(named: NSImage.multipleDocumentsName)
+			case .SymbolicLink:
+				cell.image = NSImage(named: NSImage.followLinkFreestandingTemplateName)
+			case .Directory:
+				cell.image = NSImage(named: NSImage.folderName)
+			default:
+				cell.image = nil
+			}
+		case NSUserInterfaceItemIdentifier(rawValue: "path"):
+			cell.stringValue = obj.path
+		case NSUserInterfaceItemIdentifier(rawValue: "size"):
+			cell.stringValue = Formatter.bytes(obj.size)
+		case NSUserInterfaceItemIdentifier(rawValue: "flag"):
+			cell.stringValue = obj.perm.str
+		case NSUserInterfaceItemIdentifier(rawValue: "date"):
+			cell.stringValue = Formatter.date(obj.modified)
+		default: break
+		}
+	}
+	
+	func applySort() {
+		if data.sort(with: outline.sortDescriptors) {
+			if filter == nil {
+				outline.reloadData()
+			} else {
+				search(searchField.stringValue)
+			}
+		}
+	}
+	
+	// MARK: - Search
+	
+	var searchTimer: Timer?
+	
+	@IBAction func didSearch(_ sender: NSSearchField) {
+		let debounce = sender.stringValue.isEmpty ? 0.02 : 0.2
+		searchTimer?.invalidate()
+		searchTimer = Timer.scheduledTimer(withTimeInterval: debounce, repeats: false) { [weak self] _ in
+			self?.search(sender.stringValue)
+		}
+	}
+	
+	func search(_ term: String) {
+		if term.isEmpty {
+			if filter == nil {
+				return // no need to reload
+			}
+			filter = nil
+		} else {
+			filter = data.filter({ $0.path.contains(term) })
+		}
+		outline.reloadData()
+	}
+	
+	// CMD + F to search
+	override func keyDown(with event: NSEvent) {
+		if event.characters == "f", event.modifierFlags.contains(.command), !searchField.isHidden {
+			searchField.becomeFirstResponder()
+		} else {
+			super.keyDown(with: event)
+		}
+	}
+	
+	// ESC inside search field / any NSView
+	override func cancelOperation(_ sender: Any?) {
+		self.view.window?.performSelector(onMainThread: #selector(NSWindow.makeFirstResponder(_:)), with: self.outline, waitUntilDone: false)
+	}
+}
+
+
+// MARK: - Sorting
+
+extension Array<ArchiveEntry> {
+	mutating func sort(with sortDescriptors: [NSSortDescriptor]) -> Bool {
+		if #available(macOS 12.0, *) {
+			let comp = keyPathComperators(from: sortDescriptors)
+			if !comp.isEmpty {
+				self.sort(using: comp)
+			}
+			return !comp.isEmpty
+		} else {
+			return sortUsingFunction(with: sortDescriptors)
+		}
+	}
+	
+	@available(macOS 12.0, *)
+	private func keyPathComperators(from sortDescriptors: [NSSortDescriptor]) -> [KeyPathComparator<ArchiveEntry>] {
+		sortDescriptors.map {
+			let order = $0.ascending ? SortOrder.forward : .reverse
+			return switch $0.key {
+			case "path": KeyPathComparator(\ArchiveEntry.path, order: order)
+			case "date": KeyPathComparator(\ArchiveEntry.modified, order: order)
+			case "size": KeyPathComparator(\ArchiveEntry.size, order: order)
+			case "flag": KeyPathComparator(\ArchiveEntry.perm.raw, order: order)
+			default: KeyPathComparator(\ArchiveEntry.index, order: .forward) // always ascending
+			}
+		}
+	}
+	
+	private mutating func sortUsingFunction(with sortDescriptors: [NSSortDescriptor]) -> Bool {
+		let comperators = sortDescriptors.map { ($0.key, $0.ascending) }
+		if comperators.isEmpty {
+			return false
+		}
+		self.sort { lhs, rhs in
+			for (key, asc) in comperators {
+				switch key {
+				case "path":
+					if lhs.path != rhs.path {
+						return asc ? lhs.path < rhs.path : lhs.path > rhs.path
+					}
+				case "date":
+					if lhs.modified != rhs.modified {
+						return asc ? lhs.modified < rhs.modified : lhs.modified > rhs.modified
+					}
+				case "size":
+					if lhs.size != rhs.size {
+						return asc ? lhs.size < rhs.size : lhs.size > rhs.size
+					}
+				case "flag":
+					if lhs.perm.raw != rhs.perm.raw {
+						return asc ? lhs.perm.raw < rhs.perm.raw : lhs.perm.raw > rhs.perm.raw
+					}
+				default:
+					if lhs.index != rhs.index {
+						return lhs.index < rhs.index // always ascending
+					}
+				}
+			}
+			return false
+		}
+		return true
+	}
+}
+
+
+// MARK: - Formatter
+
+private struct Formatter {
+	private static let fmtDate: DateFormatter = {
+		let x = DateFormatter()
+		x.dateFormat = "yyyy-MM-dd  HH:mm:ss"
+		return x
+	}()
+	
+	/// Human readable date formatter
+	static func date(_ time: time_t) -> String {
+		Self.fmtDate.string(from: Date(timeIntervalSince1970: TimeInterval(time)))
+	}
+	
+	/// Human readable bytes formatter
+	static func bytes(_ size: Int64) -> String {
+		if size < 0 {
+			"--"
+		} else if size < 1024 {
+			"\(size) B"
+		} else {
+			ByteCountFormatter.string(fromByteCount: size, countStyle: .file)
+		}
+	}
+}

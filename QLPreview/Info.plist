@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSExtension</key>
+	<dict>
+		<key>NSExtensionAttributes</key>
+		<dict>
+			<key>QLIsDataBasedPreview</key>
+			<false/>
+			<key>QLSupportedContentTypes</key>
+			<array>
+				<string>org.7-zip.7-zip-archive</string>
+				<string>dyn.ah62d4rv4ge8xs8u</string>
+				<string>public.archive.apk</string>
+				<string>dyn.ah62d4rv4ge80c6dp</string>
+				<string>com.microsoft.cab</string>
+				<string>dyn.ah62d4rv4ge80g2pc</string>
+				<string>com.apple.disk-image-cdr</string>
+				<string>public.cpio-archive</string>
+				<string>org.debian.deb-archive</string>
+				<string>dyn.ah62d4rv4ge80k3pc</string>
+				<string>org.idpf.epub-container</string>
+				<string>com.apple.itunes.ipsw</string>
+				<string>public.iso-image</string>
+				<string>com.sun.java-archive</string>
+				<string>public.archive.lha</string>
+				<string>dyn.ah62d4rv4ge8024db</string>
+				<string>com.apple.installer-package-archive</string>
+				<string>com.rarlab.rar-archive</string>
+				<string>dyn.ah62d4rv4ge81e2pw</string>
+				<string>com.redhat.rpm-archive</string>
+				<string>dyn.ah62d4rv4ge81e6dr</string>
+				<string>public.tar-archive</string>
+				<string>public.bzip2-archive</string>
+				<string>org.gnu.gnu-zip-archive</string>
+				<string>public.lzip-archive</string>
+				<string>dyn.ah62d4rv4ge8028u</string>
+				<string>org.tukaani.xz-archive</string>
+				<string>dyn.ah62d4rv4ge81u8u</string>
+				<string>public.tar-bzip2-archive</string>
+				<string>org.gnu.gnu-zip-tar-archive</string>
+				<string>public.lzip-tar-archive</string>
+				<string>dyn.ah62d4rv4ge81k5d4</string>
+				<string>org.tukaani.tar-xz-archive</string>
+				<string>dyn.ah62d4rv4ge81k8d4</string>
+				<string>com.sun.web-application-archive</string>
+				<string>com.apple.xar-archive</string>
+				<string>com.apple.xip-archive</string>
+				<string>public.zip-archive</string>
+				<string>com.winzip.zipx-archive</string>
+				<string>dyn.ah62d4rv4ge81y4puta</string>
+			</array>
+			<key>QLSupportsSearchableItems</key>
+			<false/>
+		</dict>
+		<key>NSExtensionPointIdentifier</key>
+		<string>com.apple.quicklook.preview</string>
+		<key>NSExtensionPrincipalClass</key>
+		<string>$(PRODUCT_MODULE_NAME).PreviewViewController</string>
+	</dict>
+</dict>
+</plist>
