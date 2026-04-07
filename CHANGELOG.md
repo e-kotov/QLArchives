@@ -10,6 +10,9 @@ Added:
 - Checkbox to toggle visibility of directories (App + Preview)
 - Drag-n-drop onto document window (App) to open files
 
+Fixed:
+- Re-enable Sandbox
+
 
 ## [0.9.0] – 2026-04-06
 Initial release
