@@ -13,10 +13,12 @@ A simple quicklook plugin for archive formats.
 
 ## Installation
 
-```bash
-brew install --cask relikd/qlarchives/qlarchives
+```sh
+brew install --cask relikd/tap/qlarchives
 xattr -d com.apple.quarantine /Applications/QLArchives.app
 ```
+
+or download manually via [release page](https://github.com/relikd/QLArchives/releases/latest).
 
 ## Features
 
