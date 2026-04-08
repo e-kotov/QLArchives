@@ -136,7 +136,7 @@ class LibArchive: IteratorProtocol, Sequence {
 		// restore file flags
 		var attrs: [FileAttributeKey : Any] = [:]
 		
-		if archive_entry_perm_is_set(ptr_entry) > 0 {
+		if entry.perm.raw > 0 {
 			attrs[.posixPermissions] = entry.perm.raw
 		}
 		if archive_entry_mtime_is_set(ptr_entry) > 0 {
