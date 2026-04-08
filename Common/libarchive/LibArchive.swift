@@ -13,11 +13,15 @@ enum LibArchiveError: Error, LocalizedError {
 class LibArchive: IteratorProtocol, Sequence {
 	typealias Element = ArchiveEntry
 	
-	private var ptr: OpaquePointer?
-	private var currentIndex: Int = 0
+	/// Pointer to `archive`
+	private var ptr_archive: OpaquePointer?
+	/// Pointer to `archive_entry`
+	private var ptr_entry: OpaquePointer?
+	/// Incremented during entry iteration
+	private var currentIndex: UInt = 0
 	/// Number of items in archive
 	/// @Note only accurate after all entries have been processed
-	var count: Int { currentIndex }
+	var count: UInt { currentIndex }
 	/// File system size
 	let compressedSize: Int64
 	/// Uncompressed size of all items
@@ -31,59 +35,136 @@ class LibArchive: IteratorProtocol, Sequence {
 		let archive = archive_read_new()
 		archive_read_support_filter_all(archive)
 		archive_read_support_format_all(archive)
-		let r = archive_read_open_filename(archive, path, 4096)
+		let r = archive_read_open_filename(archive, path, 102400)
 		if (r != ARCHIVE_OK) {
 			if let reason = archive_error_string(archive) {
 				throw LibArchiveError.generic(String(cString: reason))
 			}
 			throw LibArchiveError.generic("could not load archive")
 		}
-		self.ptr = archive
+		self.ptr_archive = archive
 	}
 	
 	deinit {
 		close()
 	}
 	
+	/// Returns version of libarchive framework `"libarchive X.Y.Z"`
 	static func version() -> String {
 		String(cString: archive_version_string())
 	}
 	
 	/// No need to call manually, will close archive automatically after last entry
 	func close() {
-		if self.ptr != nil {
-			archive_read_free(self.ptr)
-			self.ptr = nil
+		if ptr_archive != nil {
+			ptr_entry = nil
+			archive_read_close(ptr_archive)
+			archive_read_free(ptr_archive)
+			ptr_archive = nil
 		}
 	}
 	
+	/// Read next `archive_entry`. Returns `nil` if `EOF`.
 	func next() -> ArchiveEntry? {
+		guard ptr_archive != nil else {
+			return nil
+		}
 		var entry: OpaquePointer?
-		guard self.ptr != nil, archive_read_next_header(self.ptr, &entry) == ARCHIVE_OK else {
+		guard archive_read_next_header(ptr_archive, &entry) == ARCHIVE_OK else {
 			self.close()
 			return nil
 		}
+		ptr_entry = entry
 		currentIndex += 1
-		let typ = Filetype(rawValue: archive_entry_filetype(entry)) ?? .Undefined
-		let size = Int64(archive_entry_size(entry))
+		let typ = Filetype(rawValue: archive_entry_filetype(ptr_entry)) ?? .Undefined
+		let size = Int64(archive_entry_size(ptr_entry))
 		uncompressedSize += size
 		return ArchiveEntry(
 			index: currentIndex - 1,
-			path: String(cString: archive_entry_pathname(entry)),
+			path: String(cString: archive_entry_pathname(ptr_entry)),
 			size: typ == .Directory ? -1 : size,
-			perm: Perm(raw: archive_entry_perm(entry)),
+			perm: Perm(raw: archive_entry_perm(ptr_entry)),
 			filetype: typ,
-			modified: archive_entry_mtime(entry),
+			modified: archive_entry_mtime(ptr_entry),
 		)
+	}
+	
+	/// Skips X entries. Used for `extract()` operation.
+	func skip(_ count: UInt) -> Bool {
+		guard ptr_archive != nil else {
+			return false
+		}
+		var entry: OpaquePointer?
+		for _ in 0..<count {
+			if archive_read_next_header(ptr_archive, &entry) != ARCHIVE_OK {
+				self.close()
+				return false
+			}
+		}
+		if count > 0 {
+			currentIndex += count
+		}
+		return true
+	}
+	
+	/// Extract data of a single entry with given `index` into file at `url`.
+	@discardableResult
+	func extract(_ index: UInt, to url: URL) throws -> Bool {
+		guard skip(index) else {
+			return false
+		}
+		guard let entry = next() else {
+			self.close()
+			return false
+		}
+		
+		// special case symlink
+		if entry.filetype == .SymbolicLink {
+			guard let link = archive_entry_symlink(ptr_entry) else {
+				return false
+			}
+			// FIXME: how to set modification date on symlink?
+			try FileManager.default.createSymbolicLink(atPath: url.path, withDestinationPath: String(cString: link))
+			return true
+		}
+		
+		// write file content
+		FileManager.default.createFile(atPath: url.path, contents: nil)
+		let fh = try FileHandle(forWritingTo: url)
+		let success = archive_read_data_into_fd(ptr_archive, fh.fileDescriptor)
+		try fh.close()
+		
+		// restore file flags
+		var attrs: [FileAttributeKey : Any] = [:]
+		
+		if archive_entry_perm_is_set(ptr_entry) > 0 {
+			attrs[.posixPermissions] = entry.perm.raw
+		}
+		if archive_entry_mtime_is_set(ptr_entry) > 0 {
+			attrs[.modificationDate] = Date(timeIntervalSince1970: TimeInterval(entry.modified))
+		}
+		if archive_entry_ctime_is_set(ptr_entry) > 0 {
+			attrs[.creationDate] = Date(timeIntervalSince1970: TimeInterval(archive_entry_ctime(ptr_entry)))
+		}
+		if !attrs.isEmpty {
+			try? FileManager.default.setAttributes(attrs, ofItemAtPath: url.path)
+		}
+		return success == ARCHIVE_OK
 	}
 }
 
 struct ArchiveEntry {
-	let index: Int
+	/// Index of entry inside archvie file
+	let index: UInt
+	/// Path name
 	let path: String
+	/// Data length of uncompressed data
 	let size: Int64
+	/// POSIX file permissions
 	let perm: Perm
+	/// Type of entry (file, directory, symlink, etc.)
 	let filetype: Filetype
+	/// Last modified timestamp
 	let modified: time_t
 }
 

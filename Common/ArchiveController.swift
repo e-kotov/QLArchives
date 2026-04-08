@@ -28,6 +28,7 @@ class ArchiveController: NSViewController, NSOutlineViewDelegate, NSOutlineViewD
 		metaInfo.stringValue = ""
 		// otherwise search field will overlap checkbox after width <0
 		searchField.widthAnchor.constraint(greaterThanOrEqualToConstant: 40).isActive = true
+		outline.setDraggingSourceOperationMask(.copy, forLocal: false)
 	}
 	
 	// Use these two to disable initial focus of search field
@@ -256,6 +257,43 @@ extension Array<ArchiveEntry> {
 			return false
 		}
 		return true
+	}
+}
+
+
+// MARK: - Drag to extract
+
+extension ArchiveController: NSFilePromiseProviderDelegate {
+	func filePromiseProvider(_ filePromiseProvider: NSFilePromiseProvider, fileNameForType fileType: String) -> String {
+		let entry = filePromiseProvider.userInfo as! ArchiveEntry
+		return String(entry.path.split(separator: "/").last!)
+	}
+	
+	func filePromiseProvider(_ filePromiseProvider: NSFilePromiseProvider, writePromiseTo url: URL, completionHandler: @escaping @Sendable ((any Error)?) -> Void) {
+		guard let archive_url = self.fileURL else {
+			return
+		}
+		do {
+			let entry = filePromiseProvider.userInfo as! ArchiveEntry
+			try LibArchive(archive_url).extract(entry.index, to: url)
+			completionHandler(nil)
+		} catch {
+			completionHandler(error)
+			let alert = NSAlert()
+			alert.alertStyle = .critical
+			alert.messageText = error.localizedDescription
+			alert.runModal()
+			return
+		}
+	}
+	
+	func outlineView(_ outlineView: NSOutlineView, pasteboardWriterForItem item: Any) -> (any NSPasteboardWriting)? {
+		if (item as? ArchiveEntry)?.filetype == .Directory {
+			return nil
+		}
+		let provider = NSFilePromiseProvider(fileType: "public.data", delegate: self)
+		provider.userInfo = item
+		return provider
 	}
 }
 
